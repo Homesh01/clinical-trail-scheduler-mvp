@@ -24,6 +24,55 @@ export default function Index() {
   const [selectedTimes, setSelectedTimes] = useState<Record<string, string>>(
     {}
   );
+  const [csv, setCsv] = useState<string>("");
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+
+  // Minimal CSV parser that supports quoted fields and commas within quotes
+  const parseCsv = (text: string): string[][] => {
+    if (!text) return [];
+    const rows: string[][] = [];
+    let current: string[] = [];
+    let cell = "";
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const next = text[i + 1];
+      if (inQuotes) {
+        if (char === '"' && next === '"') {
+          cell += '"';
+          i++; // skip escaped quote
+        } else if (char === '"') {
+          inQuotes = false;
+        } else {
+          cell += char;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+        } else if (char === ",") {
+          current.push(cell);
+          cell = "";
+        } else if (char === "\n" || char === "\r") {
+          // Handle CRLF and LF
+          if (char === "\r" && next === "\n") {
+            i++;
+          }
+          current.push(cell);
+          rows.push(current);
+          current = [];
+          cell = "";
+        } else {
+          cell += char;
+        }
+      }
+    }
+    // Push last cell/row if any
+    if (cell.length > 0 || inQuotes || current.length > 0) {
+      current.push(cell);
+      rows.push(current);
+    }
+    return rows;
+  };
 
   // 9:00 - 17:00 in 30m intervals
   const timeSlots = Array.from({ length: 17 }, (_, i) => {
@@ -41,25 +90,35 @@ export default function Index() {
   const handleProcessFile = async () => {
     if (!file) return;
     setIsProcessing(true);
-
-    setTimeout(() => {
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(
+        "/api/process-soe?runUpload=1&runDetect=1&runReduce=1&runTsv=1&runJson=1",
+        {
+          method: "POST",
+          body: form,
+        }
+      );
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      const data = (await res.json()) as { visits: VisitEvent[]; csv?: string };
+      setVisits(data.visits || []);
+      setCsv(data.csv || "");
+      setCsvRows(parseCsv(data.csv || ""));
+    } catch (_err) {
+      // Fallback to local mock on error
       const mockData: VisitEvent[] = [
         {
           date: "2025-01-12",
           events: ["Blood Test", "Vital Signs", "Drug Administration"],
         },
-        {
-          date: "2025-01-19",
-          events: ["ECG", "PK Sample"],
-        },
-        {
-          date: "2025-01-26",
-          events: ["Blood Test", "Physical Examination"],
-        },
       ];
       setVisits(mockData);
+      setCsv("");
+      setCsvRows([]);
+    } finally {
       setIsProcessing(false);
-    }, 1500);
+    }
   };
 
   const handleScheduleVisit = async (date: string) => {
@@ -68,9 +127,6 @@ export default function Index() {
       alert("Please select a time for this visit");
       return;
     }
-    // Simulate scheduling
-    // eslint-disable-next-line no-console
-    console.log("[v0] Scheduling visit:", { date, time });
     alert(`Visit scheduled for ${date} at ${time}`);
   };
 
@@ -223,6 +279,88 @@ export default function Index() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* CSV Preview (if available) */}
+        {csv && (
+          <div className="mt-8 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+            <div className="border-b border-gray-200 p-4 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                CSV Preview (AI-extracted SOE)
+              </h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                Showing CSV output if available from processing.
+              </p>
+            </div>
+            <div className="p-4">
+              <div className="max-h-72 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-xs font-mono text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                <pre className="whitespace-pre-wrap break-words">{csv}</pre>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tabular Preview (if we could parse CSV) */}
+        {csvRows.length > 0 && (
+          <div className="mt-8 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+            <div className="border-b border-gray-200 p-4 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Table Preview (parsed CSV)
+              </h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                First row is treated as headers. Scroll to view more.
+              </p>
+            </div>
+            <div className="p-4">
+              <div className="max-h-96 overflow-auto rounded-md border border-gray-200 dark:border-gray-700">
+                <table className="min-w-full border-collapse text-sm">
+                  <thead className="sticky top-0 bg-gray-100 dark:bg-gray-800">
+                    <tr>
+                      {csvRows[0].map((h, idx) => (
+                        <th
+                          key={idx}
+                          className="border-b border-gray-200 px-3 py-2 text-left font-semibold text-gray-900 dark:border-gray-700 dark:text-gray-100"
+                        >
+                          {h || `Column ${idx + 1}`}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {csvRows.slice(1).map((row, rIdx) => (
+                      <tr
+                        key={rIdx}
+                        className={
+                          rIdx % 2 === 0
+                            ? "bg-white dark:bg-gray-900"
+                            : "bg-gray-50 dark:bg-gray-800/60"
+                        }
+                      >
+                        {row.map((cell, cIdx) => (
+                          <td
+                            key={cIdx}
+                            className="border-b border-gray-200 px-3 py-2 align-top text-gray-800 dark:border-gray-700 dark:text-gray-200"
+                          >
+                            {cell}
+                          </td>
+                        ))}
+                        {/* Fill missing cells if ragged rows */}
+                        {row.length < csvRows[0].length &&
+                          Array.from({
+                            length: csvRows[0].length - row.length,
+                          }).map((_, extraIdx) => (
+                            <td
+                              key={`extra-${extraIdx}`}
+                              className="border-b border-gray-200 px-3 py-2 align-top text-gray-800 dark:border-gray-700 dark:text-gray-200"
+                            />
+                          ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
