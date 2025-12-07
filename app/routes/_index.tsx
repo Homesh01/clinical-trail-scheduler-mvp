@@ -28,6 +28,14 @@ export default function Index() {
   const [csv, setCsv] = useState<string>("");
   const [csvRows, setCsvRows] = useState<string[][]>([]);
 
+  const handleClear = () => {
+    setFile(null);
+    setVisits([]);
+    setCsv("");
+    setCsvRows([]);
+    setSelectedTimes({});
+  };
+
   // Minimal CSV parser that supports quoted fields and commas within quotes
   const parseCsv = (text: string): string[][] => {
     if (!text) return [];
@@ -149,21 +157,28 @@ export default function Index() {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-4xl px-4 py-12">
-        <div className="mb-12 text-center">
-          <h1 className="mb-3 text-4xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+        <div className="mb-10 text-center">
+          <h1 className="mb-2 text-4xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
             Clinical Trial Scheduler
           </h1>
-          <p className="text-lg text-gray-600 dark:text-gray-300">
+          <p className="text-base text-gray-600 dark:text-gray-300">
             Upload Schedule of Events and manage patient visit appointments
           </p>
         </div>
 
         {/* File Upload Section */}
-        <div className="mb-8 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+        <div className="mb-8 rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
           <div className="border-b border-gray-200 p-6 dark:border-gray-700">
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
-              <UploadIcon className="h-5 w-5" />
-              Schedule of Events Upload
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                <UploadIcon className="h-5 w-5" />
+                Schedule of Events Upload
+              </div>
+              {visits.length > 0 && (
+                <span className="rounded-full bg-blue-600/10 px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                  {visits.length} visits
+                </span>
+              )}
             </div>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
               Upload the SOE PDF file to extract visit schedule
@@ -186,19 +201,53 @@ export default function Index() {
                   className="block w-full text-sm text-gray-900 file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700 dark:text-gray-100"
                 />
                 {file && (
-                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                    Selected: {file.name}
-                  </p>
+                  <div className="mt-2 text-xs text-gray-600 dark:text-gray-300">
+                    <span className="font-medium text-gray-800 dark:text-gray-200">
+                      {file.name}
+                    </span>
+                    <span className="ml-2 text-gray-500">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </span>
+                  </div>
                 )}
               </div>
-              <button
-                onClick={handleProcessFile}
-                disabled={!file || isProcessing}
-                className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                type="button"
-              >
-                {isProcessing ? "Processing..." : "Process File"}
-              </button>
+              <div className="flex w-full gap-3 sm:w-auto">
+                <button
+                  onClick={handleProcessFile}
+                  disabled={!file || isProcessing}
+                  className="inline-flex w-full items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  type="button"
+                >
+                  {isProcessing && (
+                    <svg
+                      className="mr-2 h-4 w-4 animate-spin"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                      />
+                    </svg>
+                  )}
+                  {isProcessing ? "Processing…" : "Process File"}
+                </button>
+                <button
+                  onClick={handleClear}
+                  className="inline-flex w-full items-center justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800 sm:w-auto"
+                  type="button"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -230,17 +279,16 @@ export default function Index() {
                     <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
                       Clinical Events:
                     </h4>
-                    <ul className="space-y-1">
+                    <div className="flex flex-wrap gap-2">
                       {visit.events.map((event) => (
-                        <li
+                        <span
                           key={event}
-                          className="flex items-center text-sm text-gray-600 dark:text-gray-300"
+                          className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/30 dark:text-blue-200"
                         >
-                          <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-blue-600" />
                           {event}
-                        </li>
+                        </span>
                       ))}
-                    </ul>
+                    </div>
                   </div>
 
                   {/* Time Selection */}
