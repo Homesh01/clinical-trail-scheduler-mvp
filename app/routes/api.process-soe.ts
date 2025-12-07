@@ -324,6 +324,104 @@ function logTableColumns(rows: SoeRow[], maxRows: number = 5) {
   }
 }
 
+// ---------- Scheduling helpers (computed dates row) ----------
+type ScheduleDates = {
+  protocol_section: string;
+  screening: string;
+  treatment_period_cycle_1_day_1: string;
+  treatment_period_cycle_2_day_1: string;
+  treatment_period_cycle_1_day_8: string;
+  treatment_period_cycle_2_day_8: string;
+  treatment_period_cycle_1_day_15: string;
+  treatment_period_cycle_2_day_15: string;
+  c3_and_beyond: string;
+  eot: string;
+};
+
+function addDays(base: Date, days: number): Date {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function formatIsoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// Assumptions:
+// - screening: today + 1 day
+// - C1D1: screening + 7 days
+// - C1D8: C1D1 + 7 days
+// - C1D15: C1D1 + 14 days
+// - C2D1: C1D15 + 30 days
+// - C2D8: C2D1 + 7 days
+// - C2D15: C2D1 + 14 days
+// - C3+ beyond: C2D15 + 30 days
+// - EOT: C3+ beyond + 30 days
+function computeScheduleDates(today: Date = new Date()): ScheduleDates {
+  const screening = addDays(today, 1);
+  const c1d1 = addDays(screening, 7);
+  const c1d8 = addDays(c1d1, 7);
+  const c1d15 = addDays(c1d1, 14);
+  const c2d1 = addDays(c1d15, 30);
+  const c2d8 = addDays(c2d1, 7);
+  const c2d15 = addDays(c2d1, 14);
+  const c3Beyond = addDays(c2d15, 30);
+  const eot = addDays(c3Beyond, 30);
+  return {
+    protocol_section: "",
+    screening: formatIsoDate(screening),
+    treatment_period_cycle_1_day_1: formatIsoDate(c1d1),
+    treatment_period_cycle_2_day_1: formatIsoDate(c2d1),
+    treatment_period_cycle_1_day_8: formatIsoDate(c1d8),
+    treatment_period_cycle_2_day_8: formatIsoDate(c2d8),
+    treatment_period_cycle_1_day_15: formatIsoDate(c1d15),
+    treatment_period_cycle_2_day_15: formatIsoDate(c2d15),
+    c3_and_beyond: formatIsoDate(c3Beyond),
+    eot: formatIsoDate(eot),
+  };
+}
+
+// Build a CSV for display that:
+// - Drops 'follow_up_every_12_weeks_up_to_3_years_from_eot'
+// - Adds a synthetic "dates" row using the above schedule
+function buildDisplayCsv(rows: SoeRow[], schedule: ScheduleDates): string {
+  const displayHeaders: (keyof SoeRow)[] = [
+    "row_label",
+    "protocol_section",
+    "screening",
+    "treatment_period_cycle_1_day_1",
+    "treatment_period_cycle_2_day_1",
+    "treatment_period_cycle_1_day_8",
+    "treatment_period_cycle_2_day_8",
+    "treatment_period_cycle_1_day_15",
+    "treatment_period_cycle_2_day_15",
+    "c3_and_beyond",
+    "eot",
+  ];
+  const esc = (s: string) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+  const headerLine = displayHeaders.join(",");
+  const datesRow = [
+    "dates",
+    schedule.protocol_section,
+    schedule.screening,
+    schedule.treatment_period_cycle_1_day_1,
+    schedule.treatment_period_cycle_2_day_1,
+    schedule.treatment_period_cycle_1_day_8,
+    schedule.treatment_period_cycle_2_day_8,
+    schedule.treatment_period_cycle_1_day_15,
+    schedule.treatment_period_cycle_2_day_15,
+    schedule.c3_and_beyond,
+    schedule.eot,
+  ]
+    .map(esc)
+    .join(",");
+  const dataLines = rows.map((r) =>
+    displayHeaders.map((h) => esc((r as any)[h] ?? "")).join(",")
+  );
+  return [headerLine, datesRow, ...dataLines].join("\n");
+}
+
 async function detectSoePages(
   params: { file?: File; fileId?: string },
   apiKey: string
@@ -428,22 +526,11 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     runJson,
   });
 
-  // Always return mock data for now (regardless of step) to allow piece-by-piece testing
+  // Build response pieces (visits will be computed; mock removed)
   {
-    const visits = [
-      {
-        date: "2025-01-12",
-        events: ["Blood Test", "Vital Signs", "Drug Administration"],
-      },
-      {
-        date: "2025-01-19",
-        events: ["ECG", "PK Sample"],
-      },
-      {
-        date: "2025-01-26",
-        events: ["Blood Test", "Physical Examination", "Drug Administration"],
-      },
-    ];
+    // const visits = [ ...mock removed... ];
+    const visits: Array<{ date: string; label?: string; events: string[] }> =
+      [];
     let fileId: string | undefined;
     let uploadError: string | undefined;
     let pdfIndices: number[] | undefined;
@@ -452,6 +539,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     let tsv: string | undefined;
     let tableData: SoeRow[] | undefined;
     let csv: string | undefined;
+    let csvDisplay: string | undefined;
     let soeFileId: string | undefined;
     let soePdfBase64: string | undefined;
     let soeFileName: string | undefined;
@@ -514,8 +602,45 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
           if (runJson && tsv) {
             try {
               tableData = await convertTsvToFixedJson(apiKey, tsv);
+              // Build both raw CSV (all columns) and display CSV (dates row, drop follow-up)
               csv = rowsToCsv(tableData);
+              const schedule = computeScheduleDates(new Date());
+              csvDisplay = buildDisplayCsv(tableData, schedule);
               logTableColumns(tableData, 15);
+              // Compute "visits" from schedule + tableData columns
+              const columnPlan: Array<{
+                key: keyof ScheduleDates;
+                label: string;
+              }> = [
+                { key: "screening", label: "Screening" },
+                { key: "treatment_period_cycle_1_day_1", label: "C1D1" },
+                { key: "treatment_period_cycle_1_day_8", label: "C1D8" },
+                { key: "treatment_period_cycle_1_day_15", label: "C1D15" },
+                { key: "treatment_period_cycle_2_day_1", label: "C2D1" },
+                { key: "treatment_period_cycle_2_day_8", label: "C2D8" },
+                { key: "treatment_period_cycle_2_day_15", label: "C2D15" },
+                { key: "c3_and_beyond", label: "C3+ and beyond" },
+                { key: "eot", label: "EOT" },
+              ];
+              const dateFor = (k: keyof ScheduleDates) =>
+                (schedule as any)[k] as string;
+              for (const col of columnPlan) {
+                const dateStr = dateFor(col.key);
+                if (!dateStr) continue;
+                const eventsForColumn: string[] = (tableData ?? [])
+                  .filter((r) => {
+                    const v = (r as any)[col.key] as string | undefined;
+                    return v !== undefined && String(v).trim() !== "";
+                  })
+                  .map((r) => r.row_label);
+                visits.push({
+                  date: dateStr,
+                  label: col.label,
+                  events: eventsForColumn,
+                });
+              }
+              // Sort visits by date asc
+              visits.sort((a, b) => a.date.localeCompare(b.date));
             } catch (err) {
               detectError = detectError ?? `${err}`;
               logWarn("TSV→JSON conversion failed", detectError);
@@ -540,6 +665,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       tsv,
       tableData,
       csv,
+      csv_display: csvDisplay ?? undefined,
       soeFileId,
       soePdfBase64,
       soeFileName,

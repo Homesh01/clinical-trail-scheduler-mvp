@@ -5,6 +5,7 @@ import { useState } from "react";
 type VisitEvent = {
   date: string;
   events: string[];
+  label?: string;
 };
 
 export const meta: MetaFunction = () => {
@@ -101,10 +102,15 @@ export default function Index() {
         }
       );
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-      const data = (await res.json()) as { visits: VisitEvent[]; csv?: string };
+      const data = (await res.json()) as {
+        visits: VisitEvent[];
+        csv?: string;
+        csv_display?: string;
+      };
       setVisits(data.visits || []);
-      setCsv(data.csv || "");
-      setCsvRows(parseCsv(data.csv || ""));
+      const csvText = data.csv_display || data.csv || "";
+      setCsv(csvText);
+      setCsvRows(parseCsv(csvText));
     } catch (_err) {
       // Fallback to local mock on error
       const mockData: VisitEvent[] = [
@@ -212,7 +218,7 @@ export default function Index() {
                 <div className="border-b border-gray-200 p-6 dark:border-gray-700">
                   <div className="flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
                     <CalendarIcon className="h-5 w-5 text-blue-600" />
-                    Visit {index + 1}
+                    {visit.label ? `${visit.label}` : `Visit ${index + 1}`}
                   </div>
                   <p className="mt-1 text-base text-gray-600 dark:text-gray-300">
                     {formatDate(visit.date)}
@@ -279,25 +285,6 @@ export default function Index() {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* CSV Preview (if available) */}
-        {csv && (
-          <div className="mt-8 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
-            <div className="border-b border-gray-200 p-4 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                CSV Preview (AI-extracted SOE)
-              </h3>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                Showing CSV output if available from processing.
-              </p>
-            </div>
-            <div className="p-4">
-              <div className="max-h-72 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-xs font-mono text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
-                <pre className="whitespace-pre-wrap break-words">{csv}</pre>
-              </div>
-            </div>
           </div>
         )}
 
