@@ -1,6 +1,6 @@
 import type { MetaFunction } from "@remix-run/cloudflare";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type VisitEvent = {
   date: string;
@@ -27,6 +27,65 @@ export default function Index() {
   );
   const [csv, setCsv] = useState<string>("");
   const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [connected, setConnected] = useState<boolean>(false);
+  const [availableSlots, setAvailableSlots] = useState<
+    Record<string, string[]>
+  >({});
+
+  // Build a Google Calendar template URL (no OAuth required).
+  const buildGCalTemplateUrl = (args: {
+    title: string;
+    date: string; // YYYY-MM-DD
+    time: string; // HH:mm (local)
+    durationMinutes?: number;
+    details?: string;
+    location?: string;
+  }) => {
+    const {
+      title,
+      date,
+      time,
+      durationMinutes = 60,
+      details = "",
+      location = "",
+    } = args;
+    const startLocal = new Date(`${date}T${time}:00`);
+    const endLocal = new Date(startLocal);
+    endLocal.setMinutes(endLocal.getMinutes() + durationMinutes);
+    const toStamp = (d: Date) =>
+      `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(
+        2,
+        "0"
+      )}${String(d.getUTCDate()).padStart(2, "0")}T${String(
+        d.getUTCHours()
+      ).padStart(2, "0")}${String(d.getUTCMinutes()).padStart(2, "0")}${String(
+        d.getUTCSeconds()
+      ).padStart(2, "0")}Z`;
+    const start = toStamp(startLocal);
+    const end = toStamp(endLocal);
+    const u = new URL("https://calendar.google.com/calendar/render");
+    u.searchParams.set("action", "TEMPLATE");
+    u.searchParams.set("text", title);
+    u.searchParams.set("dates", `${start}/${end}`);
+    if (details) u.searchParams.set("details", details);
+    if (location) u.searchParams.set("location", location);
+    return u.toString();
+  };
+
+  // Check Google connection once on mount to avoid "Connect" loop UX
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/calendar/status");
+        if (res.ok) {
+          const data = (await res.json()) as { connected: boolean };
+          setConnected(!!data.connected);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
 
   const handleClear = () => {
     setFile(null);
@@ -34,6 +93,7 @@ export default function Index() {
     setCsv("");
     setCsvRows([]);
     setSelectedTimes({});
+    setAvailableSlots({});
   };
 
   // Minimal CSV parser that supports quoted fields and commas within quotes
@@ -119,6 +179,37 @@ export default function Index() {
       const csvText = data.csv_display || data.csv || "";
       setCsv(csvText);
       setCsvRows(parseCsv(csvText));
+      // Fetch Google free slots if connected
+      try {
+        const status = await fetch("/api/calendar/status").then(
+          (r) => r.json() as Promise<{ connected: boolean }>
+        );
+        setConnected(!!status.connected);
+        if (status.connected) {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+          const results: Record<string, string[]> = {};
+          for (const v of data.visits || []) {
+            const resp = await fetch("/api/calendar/free", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                date: v.date,
+                timeZone: tz,
+                workStart: "09:00",
+                workEnd: "17:00",
+                slotMinutes: 30,
+              }),
+            });
+            if (resp.ok) {
+              const { slots } = (await resp.json()) as { slots: string[] };
+              results[v.date] = slots;
+            }
+          }
+          setAvailableSlots(results);
+        }
+      } catch {
+        setConnected(false);
+      }
     } catch (_err) {
       // Fallback to local mock on error
       const mockData: VisitEvent[] = [
@@ -135,13 +226,27 @@ export default function Index() {
     }
   };
 
-  const handleScheduleVisit = async (date: string) => {
+  const handleScheduleVisit = async (
+    visit: VisitEvent & { label?: string }
+  ) => {
+    const date = visit.date;
     const time = selectedTimes[date];
     if (!time) {
       alert("Please select a time for this visit");
       return;
     }
-    alert(`Visit scheduled for ${date} at ${time}`);
+    // Open Google Calendar template directly (no OAuth, avoids consent loop)
+    const title = (visit as any).label
+      ? `Visit - ${(visit as any).label}`
+      : "Clinical Trial Visit";
+    const url = buildGCalTemplateUrl({
+      title,
+      date,
+      time,
+      durationMinutes: 60,
+      details: "Scheduled via Clinical Trial Scheduler",
+    });
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const formatDate = (dateStr: string) => {
@@ -315,7 +420,11 @@ export default function Index() {
                         <option value="" disabled>
                           Choose appointment time
                         </option>
-                        {timeSlots.map((time) => (
+                        {(availableSlots[visit.date] &&
+                        availableSlots[visit.date].length > 0
+                          ? availableSlots[visit.date]
+                          : timeSlots
+                        ).map((time) => (
                           <option key={time} value={time}>
                             {time}
                           </option>
@@ -323,7 +432,7 @@ export default function Index() {
                       </select>
                     </div>
                     <button
-                      onClick={() => handleScheduleVisit(visit.date)}
+                      onClick={() => handleScheduleVisit(visit as any)}
                       className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"
                       type="button"
                     >
@@ -407,6 +516,7 @@ export default function Index() {
             <p className="text-gray-600 dark:text-gray-300">
               Upload and process an SOE file to view visit schedule
             </p>
+            {/* Temporarily hide Connect Google to avoid consent loop UX */}
           </div>
         )}
       </div>
