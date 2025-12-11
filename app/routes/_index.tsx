@@ -235,16 +235,20 @@ export default function Index() {
       alert("Please select a time for this visit");
       return;
     }
-    // Open Google Calendar template directly (no OAuth, avoids consent loop)
+    // Open Google Calendar template directly (no OAuth), avoiding loop
     const title = (visit as any).label
       ? `Visit - ${(visit as any).label}`
       : "Clinical Trial Visit";
+    const details =
+      visit.events && visit.events.length > 0
+        ? `Clinical events to perform:\n- ${visit.events.join("\n- ")}`
+        : "Scheduled via Clinical Trial Scheduler";
     const url = buildGCalTemplateUrl({
       title,
       date,
       time,
       durationMinutes: 60,
-      details: "Scheduled via Clinical Trial Scheduler",
+      details,
     });
     window.open(url, "_blank", "noopener,noreferrer");
   };
@@ -516,7 +520,19 @@ export default function Index() {
             <p className="text-gray-600 dark:text-gray-300">
               Upload and process an SOE file to view visit schedule
             </p>
-            {/* Temporarily hide Connect Google to avoid consent loop UX */}
+            {!connected && (
+              <>
+                <p className="mt-2 text-sm text-gray-500">
+                  To auto-schedule directly to Google Calendar, connect once:
+                </p>
+                <a
+                  href="/auth/google"
+                  className="mt-4 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Connect Google Calendar
+                </a>
+              </>
+            )}
           </div>
         )}
       </div>
