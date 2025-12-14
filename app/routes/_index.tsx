@@ -31,6 +31,8 @@ export default function Index() {
   const [availableSlots, setAvailableSlots] = useState<
     Record<string, string[]>
   >({});
+  const [soePdfUrl, setSoePdfUrl] = useState<string>("");
+  const [soePdfName, setSoePdfName] = useState<string>("soe_only.pdf");
 
   // Build a Google Calendar template URL (no OAuth required).
   const buildGCalTemplateUrl = (args: {
@@ -94,6 +96,10 @@ export default function Index() {
     setCsvRows([]);
     setSelectedTimes({});
     setAvailableSlots({});
+    if (soePdfUrl) {
+      URL.revokeObjectURL(soePdfUrl);
+      setSoePdfUrl("");
+    }
   };
 
   // Minimal CSV parser that supports quoted fields and commas within quotes
@@ -163,7 +169,7 @@ export default function Index() {
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(
-        "/api/process-soe?runUpload=1&runDetect=1&runReduce=1&runTsv=1&runJson=1",
+        "/api/process-soe?runUpload=1&runDetect=1&runReduce=1&runTsv=1&runJson=1&includeSoePdf=1",
         {
           method: "POST",
           body: form,
@@ -179,6 +185,24 @@ export default function Index() {
       const csvText = data.csv_display || data.csv || "";
       setCsv(csvText);
       setCsvRows(parseCsv(csvText));
+      // Build a downloadable SOE-only PDF if provided
+      if ((data as any).soePdfBase64) {
+        try {
+          const base64 = (data as any).soePdfBase64 as string;
+          const byteString = atob(base64);
+          const len = byteString.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) bytes[i] = byteString.charCodeAt(i);
+          const blob = new Blob([bytes], { type: "application/pdf" });
+          if (soePdfUrl) URL.revokeObjectURL(soePdfUrl);
+          setSoePdfUrl(URL.createObjectURL(blob));
+          if ((data as any).soeFileName) {
+            setSoePdfName((data as any).soeFileName as string);
+          }
+        } catch {
+          // ignore
+        }
+      }
       // Fetch Google free slots if connected
       try {
         const status = await fetch("/api/calendar/status").then(
@@ -419,20 +443,20 @@ export default function Index() {
                             [visit.date]: e.target.value,
                           }))
                         }
-                        className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                       >
-                        <option value="" disabled>
-                          Choose appointment time
-                        </option>
-                        {(availableSlots[visit.date] &&
-                        availableSlots[visit.date].length > 0
-                          ? availableSlots[visit.date]
-                          : timeSlots
-                        ).map((time) => (
-                          <option key={time} value={time}>
-                            {time}
-                          </option>
-                        ))}
+                    <option value="" disabled>
+                      Choose appointment time
+                    </option>
+                    {(availableSlots[visit.date] &&
+                    (availableSlots[visit.date] || []).length > 0
+                      ? availableSlots[visit.date]
+                      : timeSlots
+                    ).map((time) => (
+                      <option key={time} value={time}>
+                        {time}
+                      </option>
+                    ))}
                       </select>
                     </div>
                     <button
@@ -459,6 +483,15 @@ export default function Index() {
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
                 First row is treated as headers. Scroll to view more.
               </p>
+              {soePdfUrl && (
+                <a
+                  href={soePdfUrl}
+                  download={soePdfName}
+                  className="mt-3 inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                >
+                  Download SOE PDF
+                </a>
+              )}
             </div>
             <div className="p-4">
               <div className="max-h-96 overflow-auto rounded-md border border-gray-200 dark:border-gray-700">
@@ -520,19 +553,6 @@ export default function Index() {
             <p className="text-gray-600 dark:text-gray-300">
               Upload and process an SOE file to view visit schedule
             </p>
-            {!connected && (
-              <>
-                <p className="mt-2 text-sm text-gray-500">
-                  To auto-schedule directly to Google Calendar, connect once:
-                </p>
-                <a
-                  href="/auth/google"
-                  className="mt-4 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                >
-                  Connect Google Calendar
-                </a>
-              </>
-            )}
           </div>
         )}
       </div>
