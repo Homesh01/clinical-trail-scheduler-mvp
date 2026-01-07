@@ -390,26 +390,31 @@ function buildDisplayCsv(rows: SoeRow[], schedule: ScheduleDates): string {
     "row_label",
     "protocol_section",
     "screening",
+    // Group all Cycle 1 visits together
     "treatment_period_cycle_1_day_1",
-    "treatment_period_cycle_2_day_1",
     "treatment_period_cycle_1_day_8",
-    "treatment_period_cycle_2_day_8",
     "treatment_period_cycle_1_day_15",
+    // Then group all Cycle 2 visits together
+    "treatment_period_cycle_2_day_1",
+    "treatment_period_cycle_2_day_8",
     "treatment_period_cycle_2_day_15",
     "c3_and_beyond",
     "eot",
   ];
   const esc = (s: string) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-  const headerLine = displayHeaders.join(",");
+  // Use human-friendly label for the first column header
+  const headerLine = ["Trial Task", ...displayHeaders.slice(1)].join(",");
   const datesRow = [
     "dates",
     schedule.protocol_section,
     schedule.screening,
+    // Cycle 1 dates (in grouped order)
     schedule.treatment_period_cycle_1_day_1,
-    schedule.treatment_period_cycle_2_day_1,
     schedule.treatment_period_cycle_1_day_8,
-    schedule.treatment_period_cycle_2_day_8,
     schedule.treatment_period_cycle_1_day_15,
+    // Cycle 2 dates (in grouped order)
+    schedule.treatment_period_cycle_2_day_1,
+    schedule.treatment_period_cycle_2_day_8,
     schedule.treatment_period_cycle_2_day_15,
     schedule.c3_and_beyond,
     schedule.eot,

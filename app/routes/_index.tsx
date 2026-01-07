@@ -385,94 +385,6 @@ export default function Index() {
           </div>
         </div>
 
-        {/* Visits List */}
-        {visits.length > 0 && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-              Required Patient Visits
-            </h2>
-            {visits.map((visit, index) => (
-              <div
-                key={visit.date}
-                className="overflow-hidden rounded-lg border border-l-4 border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
-                style={{ borderLeftColor: "#2563eb" }}
-              >
-                <div className="border-b border-gray-200 p-6 dark:border-gray-700">
-                  <div className="flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
-                    <CalendarIcon className="h-5 w-5 text-blue-600" />
-                    {visit.label ? `${visit.label}` : `Visit ${index + 1}`}
-                  </div>
-                  <p className="mt-1 text-base text-gray-600 dark:text-gray-300">
-                    {formatDate(visit.date)}
-                  </p>
-                </div>
-                <div className="space-y-4 p-6">
-                  {/* Events List */}
-                  <div>
-                    <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-                      Clinical Events:
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {visit.events.map((event) => (
-                        <span
-                          key={event}
-                          className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/30 dark:text-blue-200"
-                        >
-                          {event}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Time Selection */}
-                  <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-end sm:gap-4">
-                    <div className="flex-1">
-                      <label
-                        htmlFor={`time-${visit.date}`}
-                        className="mb-2 flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100"
-                      >
-                        <ClockIcon className="h-4 w-4" />
-                        Select Time
-                      </label>
-                      <select
-                        id={`time-${visit.date}`}
-                        value={selectedTimes[visit.date] || ""}
-                        onChange={(e) =>
-                          setSelectedTimes((prev) => ({
-                            ...prev,
-                            [visit.date]: e.target.value,
-                          }))
-                        }
-                    className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                      >
-                    <option value="" disabled>
-                      Choose appointment time
-                    </option>
-                    {(availableSlots[visit.date] &&
-                    (availableSlots[visit.date] || []).length > 0
-                      ? availableSlots[visit.date]
-                      : timeSlots
-                    ).map((time) => (
-                      <option key={time} value={time}>
-                        {time}
-                      </option>
-                    ))}
-                      </select>
-                    </div>
-                    <button
-                      onClick={() => handleScheduleVisit(visit as any)}
-                      className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"
-                      type="button"
-                    >
-                      Schedule Visit
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Tabular Preview (if we could parse CSV) */}
         {csvRows.length > 0 && (
           <div className="mt-8 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
@@ -542,6 +454,94 @@ export default function Index() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Visits List */}
+        {visits.length > 0 && (
+          <div className="mt-8 space-y-6">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              Required Patient Visits
+            </h2>
+            {visits.map((visit, index) => (
+              <div
+                key={visit.date}
+                className="overflow-hidden rounded-lg border border-l-4 border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
+                style={{ borderLeftColor: "#2563eb" }}
+              >
+                <div className="border-b border-gray-200 p-6 dark:border-gray-700">
+                  <div className="flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    <CalendarIcon className="h-5 w-5 text-blue-600" />
+                    {visit.label ? `${visit.label}` : `Visit ${index + 1}`}
+                  </div>
+                  <p className="mt-1 text-base text-gray-600 dark:text-gray-300">
+                    {formatDate(visit.date)}
+                  </p>
+                </div>
+                <div className="space-y-4 p-6">
+                  {/* Events List */}
+                  <div>
+                    <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                      Clinical Events:
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {visit.events.map((event) => (
+                        <span
+                          key={event}
+                          className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/30 dark:text-blue-200"
+                        >
+                          {event}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Time Selection */}
+                  <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-end sm:gap-4">
+                    <div className="flex-1">
+                      <label
+                        htmlFor={`time-${visit.date}`}
+                        className="mb-2 flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100"
+                      >
+                        <ClockIcon className="h-4 w-4" />
+                        Select Time
+                      </label>
+                      <select
+                        id={`time-${visit.date}`}
+                        value={selectedTimes[visit.date] || ""}
+                        onChange={(e) =>
+                          setSelectedTimes((prev) => ({
+                            ...prev,
+                            [visit.date]: e.target.value,
+                          }))
+                        }
+                        className="block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                      >
+                        <option value="" disabled>
+                          Choose appointment time
+                        </option>
+                        {(availableSlots[visit.date] &&
+                        (availableSlots[visit.date] || []).length > 0
+                          ? availableSlots[visit.date]
+                          : timeSlots
+                        ).map((time) => (
+                          <option key={time} value={time}>
+                            {time}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => handleScheduleVisit(visit as any)}
+                      className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"
+                      type="button"
+                    >
+                      Schedule Visit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
